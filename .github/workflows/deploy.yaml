@@ -1,0 +1,41 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-node@v1
+        with:
+          node-version: 12
+      - run: npm ci --ignore-scripts
+      - run: npm run test:unit:ci
+      - uses: cypress-io/github-action@v1
+        with:
+          start: npm start
+          wait-on: 'http://localhost:8080'
+      - run: npm run build
+      - name: Archive build artifacts
+        uses: actions/upload-artifact@v1
+        with:
+          name: dist
+          path: dist
+
+  upload:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v1
+        with:
+          name: dist
+      - name: Deploy to S3
+        run: |
+          aws s3 rm s3://your-s3-bucket/* --recursive
+          aws s3 sync dist s3://your-s3-bucket
+          aws cloudfront create-invalidation --distribution-id E3DCTNGL7JRI2A --paths '/*'
